@@ -44,19 +44,23 @@ const typeDefs = gql`
     ordenesPago: [OrdenPago!]!
   }
 
-  type Transaccion {
-    id_transaccion: String!
-    id_orden_pago: String!
-    ultimo_estado: String
-    valor_de_pago: String
-    estados: [EstadoTransaccion!]!
-  }
-
   type EstadoTransaccion {
     id_estado: String!
     id_transaccion: String!
     nombre_estado: String
     fecha_hora_estado: String
+  }
+
+  type Transaccion {
+    id_transaccion: String!
+    referencia: String!
+    valor_de_pago: String
+    id_orden_pago: String!
+    ultimo_estado: String
+
+    ordenPago: OrdenPago
+    estadoActual: EstadoTransaccion
+    estados: [EstadoTransaccion!]!
   }
 
   type AuthPayload {
@@ -86,6 +90,9 @@ const typeDefs = gql`
 
     # Obtiene un cliente por su ID
     cliente(id: ID!): Cliente
+
+    # Lista todas las transacciones con detalle completo
+    transacciones(fecha: String): [Transaccion!]!
   }
 
   ################################################

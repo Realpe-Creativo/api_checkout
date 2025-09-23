@@ -2,6 +2,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Usuario, Debt, OrdenPago, Cliente, Transaccion, EstadoTransaccion, OrdenCargue } = require('../models');
+const { Op } = require('sequelize');
 require('dotenv').config();
 
 const resolvers = {
@@ -67,6 +68,53 @@ const resolvers = {
     cliente: async (_parent, { id }) => {
       return await Cliente.findByPk(id);
     },
+    transacciones: async (_, { fecha }) => {
+      const whereEstado = {};
+
+      if (fecha) {
+        const [year, month, day] = fecha.split('-').map(Number);
+        const startOfDay = new Date(Date.UTC(year, month - 1, day));
+        const endOfDay = new Date(Date.UTC(year, month - 1, day + 1));
+
+        whereEstado.fecha_hora_estado = {
+          [Op.gte]: startOfDay,
+          [Op.lt]: endOfDay
+        };
+      }
+
+      const transacciones = await Transaccion.findAll({
+        include: [
+          {
+            model: EstadoTransaccion,
+            as: 'estados',
+            where: whereEstado,
+            order: [['id_estado', 'ASC']]
+          },
+          {
+            model: OrdenPago,
+            as: 'ordenPago',
+            include: ['cliente']
+          }
+        ]
+      });
+
+      // 🔁 Post-procesar para convertir timestamps a ISO strings
+      return transacciones.map(tx => {
+        // Clonar estados para evitar modificar referencias internas
+        const estados = tx.estados?.map(est => ({
+          ...est.get({ plain: true }),
+          fecha_hora_estado: new Date(est.fecha_hora_estado).toISOString()
+        })) || [];
+
+        const estadoActual = estados[estados.length - 1] || null;
+
+        return {
+          ...tx.get({ plain: true }),
+          estados,
+          estadoActual
+        };
+      });
+    }
   },
 
   Cliente: {
@@ -131,18 +179,42 @@ const resolvers = {
   },
 
   Transaccion: {
-    // tus mapeos anteriores…
     id_transaccion: tx => tx.id_transaccion.toString(),
     id_orden_pago: tx => tx.id_orden_pago.toString(),
     ultimo_estado: tx => tx.ultimo_estado?.toString(),
     valor_de_pago: tx => tx.valor_de_pago?.toString(),
 
-    // <-- aquí el nuevo resolver:
     estados: async (tx) => {
-      return await EstadoTransaccion.findAll({
+      const estados = await EstadoTransaccion.findAll({
         where: { id_transaccion: tx.id_transaccion },
-        order: [['id_estado', 'ASC']]   // opcional: orden cronológico
+        order: [['id_estado', 'ASC']]
       });
+
+      return estados.map(est => {
+        const plain = est.get({ plain: true });
+        return {
+          ...plain,
+          fecha_hora_estado: new Date(plain.fecha_hora_estado).toISOString()
+        };
+      });
+    },
+
+    ordenPago: async (tx) => {
+      return await OrdenPago.findByPk(tx.id_orden_pago);
+    },
+
+    estadoActual: async (tx) => {
+      if (!tx.ultimo_estado) return null;
+
+      const estado = await EstadoTransaccion.findByPk(tx.ultimo_estado);
+      if (!estado) return null;
+
+      const plain = estado.get({ plain: true });
+
+      return {
+        ...plain,
+        fecha_hora_estado: new Date(plain.fecha_hora_estado).toISOString()
+      };
     }
   },
 

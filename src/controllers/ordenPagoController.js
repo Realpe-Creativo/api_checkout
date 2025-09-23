@@ -1,5 +1,5 @@
-const { OrdenPago, Cliente, Usuario, OrdenCargue } = require('../models');
-
+const { OrdenPago, Cliente, Usuario, OrdenCargue, Transaccion, EstadoTransaccion } = require('../models');
+const { Op } = require('sequelize');
 /**
  * Get all ordenes de pago
  * @route GET /ordenes-pago
@@ -72,8 +72,8 @@ const createOrdenPago = async (req, res, next) => {
     if (!cliente && forma_cargue === 'manual') {
       cliente = await Cliente.create({
         identificacion: cliente_id,
-        tipo_identificacion: tipo_identificacion, 
-        nombre_cliente: nombre_cliente, 
+        tipo_identificacion: tipo_identificacion,
+        nombre_cliente: nombre_cliente,
       });
     }
 
@@ -125,8 +125,12 @@ const updateOrdenPago = async (req, res, next) => {
     const {
       cliente_id,
       ultimo_intento_pago,
-      valor_a_pagar
+      valor_a_pagar,
+      valor_parcial,
+      fecha_vencimiento
     } = req.body;
+
+    let newClienteId;
 
     const ordenPago = await OrdenPago.findByPk(id);
     if (!ordenPago) {
@@ -134,8 +138,11 @@ const updateOrdenPago = async (req, res, next) => {
     }
 
     // Check if cliente exists if cliente_id is provided
+    // Verificar si el cliente existe usando cliente_id como identificación
     if (cliente_id) {
-      const cliente = await Cliente.findByPk(cliente_id);
+      const cliente = await Cliente.findOne({ where: { identificacion: cliente_id } });
+
+      newClienteId = cliente.id;
       if (!cliente) {
         return res.status(400).json({ message: 'Cliente not found' });
       }
@@ -143,9 +150,11 @@ const updateOrdenPago = async (req, res, next) => {
 
     // Update ordenPago
     await ordenPago.update({
-      cliente_id: cliente_id || ordenPago.cliente_id,
+      cliente_id: newClienteId,
       ultimo_intento_pago: ultimo_intento_pago || ordenPago.ultimo_intento_pago,
-      valor_a_pagar: valor_a_pagar || ordenPago.valor_a_pagar
+      valor_a_pagar: valor_a_pagar || ordenPago.valor_a_pagar,
+      valor_parcial: valor_parcial,
+      fecha_vencimiento: fecha_vencimiento
     });
 
     res.json(ordenPago);
@@ -176,13 +185,61 @@ const deleteOrdenPago = async (req, res, next) => {
 };
 
 const getOrdenesPagoByCliente = async (req, res, next) => {
-  const { tipo_identificacion, identificacion } = req.body;
+  const { tipo_identificacion, identificacion, proceso } = req.body;
+
   try {
     const cliente = await Cliente.findOne({ where: { tipo_identificacion, identificacion } });
+
     if (!cliente) {
       return res.status(404).json({ message: 'Cliente no encontrado' });
     }
-    const ordenes = await OrdenPago.findAll({ where: { cliente_id: cliente.id } });
+
+    let ordenes;
+
+    if (proceso === 'PENDIENTES') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      ordenes = await OrdenPago.findAll({
+        where: { cliente_id: cliente.id },
+        include: [
+          {
+            model: Transaccion,
+            as: 'transacciones',
+            include: [
+              {
+                model: EstadoTransaccion,
+                as: 'estados',
+                order: [['fecha_hora_estado', 'DESC']]
+              }
+            ]
+          }
+        ]
+      });
+
+      ordenes = ordenes.filter((orden) => {
+        const fecha = new Date(orden.fecha_vencimiento);
+        const venceDespuesDeHoy = fecha >= today;
+        if (!venceDespuesDeHoy) return false;
+
+        const transacciones = orden.transacciones || [];
+
+        if (transacciones.length === 0) return true;
+
+        const ultimaTransaccion = transacciones[transacciones.length - 1];
+        const estadosOrdenados = (ultimaTransaccion.estados || []).sort(
+          (a, b) => new Date(b.fecha_hora_estado) - new Date(a.fecha_hora_estado)
+        );
+        const ultimoEstado = estadosOrdenados[0]?.nombre_estado;
+
+        return !['APROBADA','APROBADO', 'EN PROCESO'].includes(ultimoEstado);
+      });
+    } else {
+      ordenes = await OrdenPago.findAll({
+        where: { cliente_id: cliente.id }
+      });
+    }
+
     return res.json(ordenes);
   } catch (err) {
     next(err);

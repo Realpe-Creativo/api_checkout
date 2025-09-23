@@ -7,6 +7,29 @@ const estadoTransaccionController = require('../controllers/estadoTransaccionCon
 
 const router = express.Router();
 
+/**
+ * @route POST /transacciones
+ * @desc Create a new transaccion
+ * @access Private
+ */
+router.post('/',
+  [
+    (req, res, next) => {
+      console.log('Body recibido:', req.body);
+      next();
+    },
+    body('valor_de_pago').isFloat({ min: 0 }).withMessage('Valor de pago must be a positive number'),
+    body('id_orden_pago').isInt().withMessage('ID orden pago must be an integer'),
+    body('estado_inicial').optional().notEmpty().withMessage('Estado inicial cannot be empty'),
+    validate
+  ],
+  transaccionController.createTransaccion
+);
+
+router.post('/consultar-estado', transaccionController.consultarEstadoTransaccion);
+
+router.post('/notificacion_pago', transaccionController.notificacion_pago);
+
 // Protect all routes
 router.use(authenticateToken);
 
@@ -38,18 +61,6 @@ router.get('/:id/estados', [
 ], authorizeRole(['ADMIN', 'USER']), estadoTransaccionController.getEstadosByTransaccionId);
 
 /**
- * @route POST /transacciones
- * @desc Create a new transaccion
- * @access Private
- */
-router.post('/', [
-  body('valor_de_pago').isFloat({ min: 0 }).withMessage('Valor de pago must be a positive number'),
-  body('id_orden_pago').isInt().withMessage('ID orden pago must be an integer'),
-  body('estado_inicial').optional().notEmpty().withMessage('Estado inicial cannot be empty'),
-  validate
-], authorizeRole(['ADMIN', 'USER']), transaccionController.createTransaccion);
-
-/**
  * @route PUT /transacciones/:id/estado
  * @desc Update transaccion state
  * @access Private
@@ -69,5 +80,14 @@ router.delete('/:id', [
   param('id').isInt().withMessage('ID must be an integer'),
   validate
 ], authorizeRole(['ADMIN']), transaccionController.deleteTransaccion);
+
+router.post('/byOrder', [
+  (req, res, next) => {
+      console.log('Body recibido:', req.body);
+      next();
+    },
+  body('order_id').isInt().withMessage('El ID de la orden debe ser un número entero'),
+  validate
+], authorizeRole(['ADMIN', 'USER']), transaccionController.consultarTransaccionByOrden);
 
 module.exports = router;

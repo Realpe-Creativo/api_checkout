@@ -24,6 +24,10 @@ const EstadoTransaccion = sequelize.define('EstadoTransaccion', {
     type: DataTypes.DATE,
     allowNull: false,
     defaultValue: DataTypes.NOW
+  },
+  payload_json: {
+    type: DataTypes.TEXT, // o DataTypes.JSONB si tu BD lo soporta
+    allowNull: true
   }
 }, {
   tableName: 'estados_transacciones',
