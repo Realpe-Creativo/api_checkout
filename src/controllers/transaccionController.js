@@ -118,17 +118,20 @@ const createTransaccion = async (req, res, next) => {
     const paymentUrl = process.env.PAYMENT_GATEWAY_URL;
     const userApp = process.env.PAYMENT_GATEWAY_USER;
     const passwordApp = process.env.PAYMENT_GATEWAY_PASSWORD;
+    const sucursalApp = process.env.PAYMENT_GATEWAY_SUCURSAL;
+    const productApp = process.env.PAYMENT_GATEWAY_PRODUCT;
 
     const now = moment();
     const transaction_date = now.format('DD/MM/YYYY HH:mm:ss');
     const channel_date = now.clone().add(1, 'days').format('DD/MM/YYYY HH:mm:ss');
+    const expiration_date = now.clone().add(2, 'hours').format('DD/MM/YYYY HH:mm:ss');
 
     const payload = {
       user_app: userApp,
       password_app: passwordApp,
-      commerce_id: "2662",
+      commerce_id: sucursalApp,
       user_client: "61067",
-      product_id: "1238",
+      product_id: productApp,
       transaction_date,
       channel_date,
       commerce_url: `${process.env.PAYMENT_RETURN_URL_BASE}?referencia=${nextRef}`,
@@ -159,13 +162,13 @@ const createTransaccion = async (req, res, next) => {
         transaction_total: `${valorPasarela}`,
         registry: [
           {
-            product_id: "1238",
+            product_id: productApp,
             detail: `PAGO DEUDA - ${nextRef}`,
             reference01: `${nextRef}`,
             state: "",
             amount: `${valorPasarela}`,
             purchase_amount: `${valorPasarela}`,
-            expiration_date: "31/12/2025 09:06:30",
+            expiration_date: expiration_date,
             value_iva: "000",
             identifier: ""
           }
