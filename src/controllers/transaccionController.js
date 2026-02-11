@@ -329,12 +329,15 @@ const consultarEstadoTransaccion = async (req, res, next) => {
       return res.status(500).json({ message: 'Error en la construcción de petición Payment' });
     }
 
+    const sucursalApp = process.env.PAYMENT_GATEWAY_SUCURSAL;
+    const productApp = process.env.PAYMENT_GATEWAY_PRODUCT;
+
     const payload = {
       user_app,
       password_app,
-      commerce_id: "2662",
+      commerce_id: sucursalApp,
       transaction_id: referencia,
-      product_id: "1238"
+      product_id: productApp
     };
 
     const response = await axios.post(consultaUrl, payload, {
